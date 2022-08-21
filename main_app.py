@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 
 st.set_page_config(layout="wide")
 
@@ -45,14 +46,82 @@ if file_counted is not None and file_expected is not None:
         st.write('Counted inventory has not duplicate RFID values')
     st.markdown('---')
 
+    st.subheader('Inventory Discrepancy')
+
     # Tweak datasets before merge them
     df_B = df_counted.groupby('Retail_Product_SKU').count()[['RFID']].reset_index().rename(columns = {'RFID':"Retail_CCQTY"})
 
     selected_columns = ['Retail_Product_Color','Retail_Product_Level1', 'Retail_Product_Level1Name','Retail_Product_Level2Name','Retail_Product_Level3Name','Retail_Product_Level4Name','Retail_Product_Name','Retail_Product_SKU','Retail_Product_Size','Retail_Product_Style', 'Retail_SOHQTY']
     df_A = df_expected[selected_columns]
 
+    #Merge datasets
+    df_discrepancy = pd.merge(df_A, df_B, how='outer', left_on='Retail_Product_SKU', right_on = 'Retail_Product_SKU', indicator = True)
+
+    df_discrepancy['Retail_CCQTY'] = df_discrepancy['Retail_CCQTY'].fillna(0).astype(int)
+    df_discrepancy["Retail_SOHQTY"] = df_discrepancy["Retail_SOHQTY"].fillna(0).astype(int)
+
+    #Create Diff column which is the difference between Retail_CCQTY and Retail SOHQTY
+    df_discrepancy["Diff"] = df_discrepancy["Retail_CCQTY"] - df_discrepancy["Retail_SOHQTY"]
+
+    #Create Unders column which is the absolute value of Diff values that are less than 0
+    df_discrepancy.loc[df_discrepancy["Diff"]<0, "Unders"] = df_discrepancy["Diff"] * (-1)
+
+    #Unders column fill NaN values with 0's and set type to int
+    df_discrepancy["Unders"] = df_discrepancy["Unders"].fillna(0).astype(int)
+
+    #Create Overs column which is the Diff values that are greater than 0
+    df_discrepancy.loc[df_discrepancy["Diff"]>0, "Overs"] = df_discrepancy["Diff"]
+
+    #Overs column fill NaN values with 0's and set type to int
+    df_discrepancy["Overs"] = df_discrepancy["Overs"].fillna(0).astype(int)
+
+    #Create Match column which stores a 0 if the inventories does not match and a 1 if the inventories match
+    df_discrepancy.loc[df_discrepancy['Diff'] == 0, 'Match'] = 1
+    df_discrepancy.loc[df_discrepancy['Diff'] != 0, 'Match'] = 0
+    df_discrepancy["Match"] = df_discrepancy["Match"].astype(int)
+
+    #SKUSide column show which sku inventory as values > 0
+    df_discrepancy.loc[(df_discrepancy['Retail_CCQTY'] > 0) & (df_discrepancy['Retail_SOHQTY'] == 0), 'SKUSide'] = 'CC Only'
+    df_discrepancy.loc[(df_discrepancy['Retail_SOHQTY'] > 0) & (df_discrepancy['Retail_CCQTY'] == 0), 'SKUSide'] = 'SOH Only'
+    df_discrepancy.loc[(df_discrepancy['Retail_SOHQTY'] > 0) & (df_discrepancy['Retail_CCQTY'] > 0), 'SKUSide'] = 'SOH & CC'
+
+
+    options = st.multiselect(
+     'Group by',
+     selected_columns[:-1],
+     ['Retail_Product_Color','Retail_Product_Level1'])
+    
+    df_grouped = df_discrepancy.groupby(by = options).sum().reset_index()    
+    st.dataframe(df_grouped)
+
+    st.markdown('---')
+
+    st.subheader('Inventory Discrepancy Chart')
+
+    option = st.selectbox(
+        'Display by',
+        selected_columns[:-1]
+    )
+
+    fig = px.histogram(df_discrepancy, x=option, y=["Retail_SOHQTY", "Retail_CCQTY"],
+             barmode='group', 
+             text_auto=True,                           
+             height=600)    
+
+    fig.update_yaxes(title_text = 'Inventory stock')
+
+    # Plot!
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown('---')    
+    st.markdown("<h3 style='text-align: center; color: white;'>Cristopher Ortiz </h3>", unsafe_allow_html=True)
+
+
+
+
+
+
+
+
     
 
-
-
-
+    
