@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 
 st.set_page_config(layout="wide")
@@ -85,6 +86,16 @@ if file_counted is not None and file_expected is not None:
     df_discrepancy.loc[(df_discrepancy['Retail_SOHQTY'] > 0) & (df_discrepancy['Retail_CCQTY'] == 0), 'SKUSide'] = 'SOH Only'
     df_discrepancy.loc[(df_discrepancy['Retail_SOHQTY'] > 0) & (df_discrepancy['Retail_CCQTY'] > 0), 'SKUSide'] = 'SOH & CC'
 
+    #Accuracy Calculation
+    df_discrepancy['SKUAccuracy'] = df_discrepancy['Match'] / df_discrepancy['Retail_SOHQTY']
+    df_discrepancy.loc[df_discrepancy['SKUAccuracy'] == np.inf, 'SKUAccuracy'] = 0
+
+    df_discrepancy['ItemAccuracy'] = df_discrepancy['Retail_CCQTY'] / df_discrepancy['Retail_SOHQTY']
+    df_discrepancy.loc[df_discrepancy['ItemAccuracy'] == np.inf, 'ItemAccuracy'] = 0
+
+    df_discrepancy['UnitLevelAccuracy'] = (df_discrepancy['Retail_SOHQTY'] - df_discrepancy['Unders'] - df_discrepancy['Overs'] ) / df_discrepancy['Retail_SOHQTY']
+    df_discrepancy.loc[df_discrepancy['UnitLevelAccuracy'] == -np.inf, 'UnitLevelAccuracy'] = 0
+
 
     options = st.multiselect(
      'Group by',
@@ -96,13 +107,16 @@ if file_counted is not None and file_expected is not None:
 
     st.markdown('---')
 
+    # Inventory Discrepancy data display
     st.subheader('Inventory Discrepancy Chart')
 
+    #Dropdown
     option = st.selectbox(
         'Display by',
         selected_columns[:-1]
     )
 
+    #Bar Chart
     fig = px.histogram(df_discrepancy, x=option, y=["Retail_SOHQTY", "Retail_CCQTY"],
              barmode='group', 
              text_auto=True,                           
@@ -110,8 +124,22 @@ if file_counted is not None and file_expected is not None:
 
     fig.update_yaxes(title_text = 'Inventory stock')
 
+    # Plot
+    st.plotly_chart(fig, use_container_width=True)    
+
+    # Accuracy chart
+    st.subheader('Inventory Accuracy Chart')
+
+    #Bar Chart
+    fig_accuracy = px.histogram(df_discrepancy, x=option, y=['SKUAccuracy','ItemAccuracy','UnitLevelAccuracy'],
+             barmode='group', 
+             text_auto=True,                           
+             height=600)    
+
+    fig_accuracy.update_yaxes(title_text = 'Accuracy')
+
     # Plot!
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig_accuracy, use_container_width=True)
     st.markdown('---')    
     st.markdown("<h3 style='text-align: center; color: white;'>Cristopher Ortiz </h3>", unsafe_allow_html=True)
 
